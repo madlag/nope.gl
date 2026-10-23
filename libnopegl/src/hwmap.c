@@ -36,6 +36,7 @@
 extern const struct hwmap_class ngli_hwmap_common_class;
 extern const struct hwmap_class *ngli_hwmap_gl_classes[];
 extern const struct hwmap_class *ngli_hwmap_vk_classes[];
+extern const struct hwmap_class *ngli_hwmap_mtl_classes[];
 
 static const struct hwmap_class *get_hwmap_class(const struct hwmap *hwmap, const struct nmd_frame *frame)
 {
@@ -142,6 +143,10 @@ static const struct hwmap_class **get_backend_hwmap_classes(enum ngl_backend_typ
 #ifdef BACKEND_VK
     if (backend == NGL_BACKEND_VULKAN)
         return ngli_hwmap_vk_classes;
+#endif
+#ifdef BACKEND_MTL
+    if (backend == NGL_BACKEND_METAL)
+        return ngli_hwmap_mtl_classes;
 #endif
     return NULL;
 }

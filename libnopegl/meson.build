@@ -536,6 +536,7 @@ gbackends_cfg = {
   'mtl': {
     'src': files(
       'src/backends/mtl/api_mtl.c',
+      'src/backends/mtl/hwmap_videotoolbox_mtl.m',
       'src/ngpu/vulkan/glslang_utils.c',
       'src/ngpu/metal/bindgroup_mtl.m',
       'src/ngpu/metal/buffer_mtl.m',

@@ -172,6 +172,11 @@ int ngpu_texture_mtl_wrap(struct ngpu_texture *s, const struct ngpu_texture_para
 {
     struct ngpu_texture_mtl *s_priv = (struct ngpu_texture_mtl *)s;
 
+    /* A wrapper may be re-wrapped when the wrapped texture changes size */
+    [s_priv->texture release];
+    [s_priv->sampler release];
+    s_priv->sampler = nil;
+
     init_fields(s, params);
     s_priv->wrapped = 1;
     s_priv->texture = [texture retain];

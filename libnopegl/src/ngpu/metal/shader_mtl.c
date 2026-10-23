@@ -157,6 +157,10 @@ int ngpu_shader_mtl_translate(const void *spirv, size_t size, enum ngpu_program_
     spvc_compiler_options_set_uint(options, SPVC_COMPILER_OPTION_MSL_VERSION, SPVC_MAKE_MSL_VERSION(2, 3, 0));
     spvc_compiler_options_set_uint(options, SPVC_COMPILER_OPTION_MSL_PLATFORM,
                                    ios ? SPVC_MSL_PLATFORM_IOS : SPVC_MSL_PLATFORM_MACOS);
+    /* Vulkan clip space has its Y axis pointing down, Metal up: flipping the
+     * vertex output Y (like MoltenVK) makes Metal behave exactly like Vulkan,
+     * including for the internal passes writing clip space positions directly */
+    spvc_compiler_options_set_bool(options, SPVC_COMPILER_OPTION_FLIP_VERTEX_Y, SPVC_TRUE);
     if (spvc_compiler_install_compiler_options(compiler, options) != SPVC_SUCCESS) {
         ret = NGL_ERROR_EXTERNAL;
         goto end;

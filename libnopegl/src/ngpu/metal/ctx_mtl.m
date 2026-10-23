@@ -678,25 +678,21 @@ static void mtl_destroy(struct ngpu_ctx *s)
     ngli_glslang_uninit();
 }
 
+/*
+ * The vertex shaders flip their output Y axis (see shader_mtl.c), so the
+ * projection follows the Vulkan conventions. Unlike Vulkan, Metal determines
+ * the winding after that flip, so the cull mode is left untouched.
+ */
 static enum ngpu_cull_mode mtl_transform_cull_mode(struct ngpu_ctx *s, enum ngpu_cull_mode cull_mode)
 {
-    /* Metal evaluates the winding in window coordinates, whose Y axis points
-     * down: a counter-clockwise triangle in nope.gl (OpenGL) coordinates is
-     * clockwise for Metal. Same as Vulkan. */
-    static const enum ngpu_cull_mode cull_mode_map[NGPU_CULL_MODE_NB] = {
-        [NGPU_CULL_MODE_NONE]      = NGPU_CULL_MODE_NONE,
-        [NGPU_CULL_MODE_FRONT_BIT] = NGPU_CULL_MODE_BACK_BIT,
-        [NGPU_CULL_MODE_BACK_BIT]  = NGPU_CULL_MODE_FRONT_BIT,
-    };
-    return cull_mode_map[cull_mode];
+    return cull_mode;
 }
 
 static void mtl_transform_projection_matrix(struct ngpu_ctx *s, float *dst)
 {
-    /* Metal NDC have the same Y orientation as OpenGL but a [0,1] depth range */
     static const NGLI_ALIGNED_MAT(matrix) = {
         1.0f, 0.0f, 0.0f, 0.0f,
-        0.0f, 1.0f, 0.0f, 0.0f,
+        0.0f,-1.0f, 0.0f, 0.0f,
         0.0f, 0.0f, 0.5f, 0.0f,
         0.0f, 0.0f, 0.5f, 1.0f,
     };
