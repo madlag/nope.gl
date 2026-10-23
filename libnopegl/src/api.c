@@ -68,6 +68,7 @@ NGLI_STATIC_ASSERT(sizeof(enum ngl_capture_buffer_type) == sizeof(int32_t), "32-
 
 extern const struct api_impl api_gl;
 extern const struct api_impl api_vk;
+extern const struct api_impl api_mtl;
 
 static const struct api_impl *api_map[NGL_BACKEND_NB] = {
 #ifdef BACKEND_GL
@@ -78,6 +79,9 @@ static const struct api_impl *api_map[NGL_BACKEND_NB] = {
 #endif
 #ifdef BACKEND_VK
     [NGL_BACKEND_VULKAN] = &api_vk,
+#endif
+#ifdef BACKEND_MTL
+    [NGL_BACKEND_METAL] = &api_mtl,
 #endif
 };
 

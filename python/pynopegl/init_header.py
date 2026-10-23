@@ -63,6 +63,7 @@ class Backend(IntEnum):
     OPENGL   = _ngl.BACKEND_OPENGL
     OPENGLES = _ngl.BACKEND_OPENGLES
     VULKAN   = _ngl.BACKEND_VULKAN
+    METAL    = _ngl.BACKEND_METAL
 
 
 class Cap(IntEnum):

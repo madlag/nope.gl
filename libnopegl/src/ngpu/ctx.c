@@ -35,6 +35,7 @@ const char *ngli_backend_get_string_id(enum ngl_backend_type backend)
     case NGL_BACKEND_OPENGL:   return "opengl";
     case NGL_BACKEND_OPENGLES: return "opengles";
     case NGL_BACKEND_VULKAN:   return "vulkan";
+    case NGL_BACKEND_METAL:    return "metal";
     default:                   return "unknown";
     }
 }
@@ -46,6 +47,7 @@ const char *ngli_backend_get_full_name(enum ngl_backend_type backend)
     case NGL_BACKEND_OPENGL:   return "OpenGL";
     case NGL_BACKEND_OPENGLES: return "OpenGL ES";
     case NGL_BACKEND_VULKAN:   return "Vulkan";
+    case NGL_BACKEND_METAL:    return "Metal";
     default:                   return "Unknown";
     }
 }
@@ -58,6 +60,7 @@ int ngpu_viewport_is_valid(const struct ngpu_viewport *viewport)
 extern const struct ngpu_ctx_class ngpu_ctx_gl;
 extern const struct ngpu_ctx_class ngpu_ctx_gles;
 extern const struct ngpu_ctx_class ngpu_ctx_vk;
+extern const struct ngpu_ctx_class ngpu_ctx_mtl;
 
 static const struct ngpu_ctx_class *backend_map[NGL_BACKEND_NB] = {
 #ifdef BACKEND_GL
@@ -68,6 +71,9 @@ static const struct ngpu_ctx_class *backend_map[NGL_BACKEND_NB] = {
 #endif
 #ifdef BACKEND_VK
     [NGL_BACKEND_VULKAN] = &ngpu_ctx_vk,
+#endif
+#ifdef BACKEND_MTL
+    [NGL_BACKEND_METAL] = &ngpu_ctx_mtl,
 #endif
 };
 

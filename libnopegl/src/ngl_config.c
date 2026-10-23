@@ -38,6 +38,8 @@ int ngli_config_set_debug_defaults(struct ngl_config *config)
         case NGL_BACKEND_VULKAN:
             config->debug |= DEBUG_VK;
             break;
+        case NGL_BACKEND_METAL:
+            break;
         default:
             return NGL_ERROR_UNSUPPORTED;
     }

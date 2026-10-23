@@ -533,6 +533,35 @@ gbackends_cfg = {
       },
     },
   },
+  'mtl': {
+    'src': files(
+      'src/backends/mtl/api_mtl.c',
+      'src/ngpu/vulkan/glslang_utils.c',
+      'src/ngpu/metal/bindgroup_mtl.m',
+      'src/ngpu/metal/buffer_mtl.m',
+      'src/ngpu/metal/ctx_mtl.m',
+      'src/ngpu/metal/format_mtl.m',
+      'src/ngpu/metal/pipeline_mtl.m',
+      'src/ngpu/metal/program_mtl.m',
+      'src/ngpu/metal/rendertarget_mtl.m',
+      'src/ngpu/metal/shader_mtl.c',
+      'src/ngpu/metal/texture_mtl.m',
+      'src/ngpu/vulkan/wsi_apple.m',
+    ),
+    'cfg': 'BACKEND_MTL',
+    'hosts_cfg': {
+      'darwin': {
+        'deps': ['glslang'],
+        'libs': ['spirv-cross-c', 'spirv-cross-msl', 'spirv-cross-glsl', 'spirv-cross-core'],
+        'frameworks': ['Foundation', 'Metal', 'QuartzCore', 'Cocoa'],
+      },
+      'iphone': {
+        'deps': ['glslang'],
+        'libs': ['spirv-cross-c', 'spirv-cross-msl', 'spirv-cross-glsl', 'spirv-cross-core'],
+        'frameworks': ['Foundation', 'Metal', 'QuartzCore', 'UIKit'],
+      },
+    },
+  },
 }
 
 if host_system in ['darwin', 'iphone']

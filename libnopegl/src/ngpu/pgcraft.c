@@ -1277,7 +1277,8 @@ static void setup_glsl_info_gl(struct ngpu_pgcraft *s)
 }
 #endif
 
-#if defined(BACKEND_VK)
+#if defined(BACKEND_VK) || defined(BACKEND_MTL)
+/* Metal shaders are translated from the same SPIR-V as Vulkan ones */
 static void setup_glsl_info_vk(struct ngpu_pgcraft *s)
 {
     struct ngpu_ctx *gpu_ctx = s->gpu_ctx;
@@ -1311,8 +1312,8 @@ static void setup_glsl_info(struct ngpu_pgcraft *s)
     }
 #endif
 
-#if defined(BACKEND_VK)
-    if (config->backend == NGL_BACKEND_VULKAN) {
+#if defined(BACKEND_VK) || defined(BACKEND_MTL)
+    if (config->backend == NGL_BACKEND_VULKAN || config->backend == NGL_BACKEND_METAL) {
         setup_glsl_info_vk(s);
         return;
     }
