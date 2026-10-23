@@ -212,6 +212,12 @@ _EXTERNAL_DEPS = dict(
         url="https://github.com/KhronosGroup/glslang/archive/refs/tags/@VERSION@.tar.gz",
         sha256="172385478520335147d3b03a1587424af0935398184095f24beab128a254ecc7",
     ),
+    spirv_cross=dict(
+        version="vulkan-sdk-1.4.341.0",
+        url="https://github.com/KhronosGroup/SPIRV-Cross/archive/refs/tags/@VERSION@.tar.gz",
+        dst_file="spirv-cross-@VERSION@.tar.gz",
+        sha256="b2665ac9ddb65ff75a7ca2f6d410e73da443692742a1e3a5b7728ca6069a400c",
+    ),
     pkgconf=dict(
         version="1.9.5",
         url="https://github.com/pkgconf/pkgconf/archive/refs/tags/pkgconf-@VERSION@.tar.gz",
@@ -274,10 +280,12 @@ def _get_external_deps(args):
         deps.append("fribidi")
     elif host == "Darwin":
         deps.append("moltenvk_Darwin")
+        deps.append("spirv_cross")
     elif host == "iOS":
         deps.append("boringssl")
         deps.append("ffmpeg")
         deps.append("moltenvk_iOS")
+        deps.append("spirv_cross")
         deps.append("freetype")
         deps.append("harfbuzz")
         deps.append("fribidi")
@@ -818,8 +826,61 @@ def _glslang_setup(cfg):
             f"-DCMAKE_OSX_SYSROOT=iphoneos",
             f"-DCMAKE_OSX_ARCHITECTURES={cfg.ios_abi}",
         ]
+    elif cfg.host == "Darwin":
+        cmake_args += _darwin_cmake_arch_args()
     return [
         _cmd_join(*cmake_args),
+    ]
+
+
+def _darwin_cmake_arch_args():
+    # A cmake running under Rosetta reports x86_64 as the host processor and
+    # would build x86_64 libraries that cannot be linked into an arm64 build.
+    return [f"-DCMAKE_OSX_ARCHITECTURES={platform.machine()}"]
+
+
+@_block("spirv-cross-setup", [])
+def _spirv_cross_setup(cfg):
+    build_type = "Debug" if cfg.args.buildtype == "debug" else "Release"
+    cmake_args = [
+        "cmake",
+        "-GNinja",
+        f"-DCMAKE_BUILD_TYPE={build_type}",
+        f"-DCMAKE_INSTALL_PREFIX={cfg.prefix}",
+        "-DSPIRV_CROSS_STATIC=ON",
+        "-DSPIRV_CROSS_SHARED=OFF",
+        "-DSPIRV_CROSS_CLI=OFF",
+        "-DSPIRV_CROSS_ENABLE_TESTS=OFF",
+        "-DSPIRV_CROSS_ENABLE_GLSL=ON",
+        "-DSPIRV_CROSS_ENABLE_MSL=ON",
+        "-DSPIRV_CROSS_ENABLE_HLSL=OFF",
+        "-DSPIRV_CROSS_ENABLE_CPP=OFF",
+        "-DSPIRV_CROSS_ENABLE_REFLECT=OFF",
+        "-DSPIRV_CROSS_ENABLE_UTIL=OFF",
+        "-DSPIRV_CROSS_ENABLE_C_API=ON",
+        "-S",
+        cfg.externals["spirv_cross"],
+        "-B",
+        _get_builddir(cfg, "spirv_cross"),
+    ]
+    if cfg.host == "iOS":
+        cmake_args += [
+            f"-DCMAKE_OSX_SYSROOT=iphoneos",
+            f"-DCMAKE_OSX_ARCHITECTURES={cfg.ios_abi}",
+        ]
+    elif cfg.host == "Darwin":
+        cmake_args += _darwin_cmake_arch_args()
+    return [
+        _cmd_join(*cmake_args),
+    ]
+
+
+@_block("spirv-cross-install", [_spirv_cross_setup])
+def _spirv_cross_install(cfg):
+    builddir = _get_builddir(cfg, "spirv_cross")
+    return [
+        _cmd_join("cmake", "--build", builddir),
+        _cmd_join("cmake", "--install", builddir),
     ]
 
 
@@ -903,12 +964,14 @@ def _fribidi_install(cfg):
         "Darwin": [
             _nopemd_install,
             _glslang_install,
+            _spirv_cross_install,
             _moltenvk_install,
         ],
         "iOS": [
             _nopemd_install,
             _moltenvk_install,
             _glslang_install,
+            _spirv_cross_install,
             _freetype_install,
             _harfbuzz_install,
             _fribidi_install,
