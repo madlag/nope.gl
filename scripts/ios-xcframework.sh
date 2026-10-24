@@ -25,7 +25,8 @@
 # NopeGL.xcframework. Each prefix becomes one slice of the XCFramework: all its
 # static libraries (nope.gl, nope.media, FFmpeg, BoringSSL, glslang,
 # SPIRV-Cross, FreeType, HarfBuzz, FriBidi, ...) are merged into one libNopeGL.a
-# and the public headers are exposed with a "NopeGL" Clang module.
+# and the public headers are exposed with a "NopeGL" Clang module, marked extern_c so
+# C++ clients (and Swift with C++ interop) link against the C symbols.
 #
 # Usage: ios-xcframework.sh <output-dir> <ios-prefix> [<ios-prefix>...]
 # Example:
@@ -72,7 +73,7 @@ for prefix in "$@"; do
     cp "$prefix/include/nopegl/nopegl.h" "$slice/Headers/nopegl/"
     cp "$prefix/include/nopemd.h" "$slice/Headers/"
     cat > "$slice/Headers/module.modulemap" <<EOF
-module NopeGL {
+module NopeGL [extern_c] {
     header "nopegl/nopegl.h"
     export *
 }
