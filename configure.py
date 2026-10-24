@@ -111,21 +111,30 @@ _IOS_ABI_MAP = dict(
     x86_64="x86_64",
 )
 
+_IOS_VERSION_MIN = "18.0"
+
+# Compiler flag used to set the minimum iOS version, for each SDK platform
+_IOS_VERSION_MIN_FLAG_MAP = dict(
+    iphoneos="-mios-version-min",
+    iphonesimulator="-mios-simulator-version-min",
+)
+
 
 _IOS_CROSS_FILE_TPL = textwrap.dedent(
     """\
     [constants]
-    root = '/Applications/Xcode.app/Contents/Developer/Platforms/iPhoneOS.platform/Developer'
-    sysroot = root / 'SDKs/iPhoneOS.sdk'
+    root = '{platform_root}'
+    sysroot = '{sysroot}'
+    common_args = ['-arch', '{abi}', '-isysroot', sysroot, '{version_min_flag}={version_min}']
     [built-in options]
-    c_args = ['-arch', '{abi}', '-isysroot', sysroot]
-    c_link_args = ['-arch', '{abi}', '-isysroot', sysroot]
-    objc_args = ['-arch', '{abi}', '-isysroot', sysroot]
-    objc_link_args = ['-arch', '{abi}', '-isysroot', sysroot]
-    cpp_args = ['-arch', '{abi}', '-isysroot', sysroot]
-    cpp_link_args = ['-arch', '{abi}', '-isysroot', sysroot]
-    objcpp_args = ['-arch', '{abi}', '-isysroot', sysroot]
-    objcpp_link_args = ['-arch', '{abi}', '-isysroot', sysroot]
+    c_args = common_args
+    c_link_args = common_args
+    objc_args = common_args
+    objc_link_args = common_args
+    cpp_args = common_args
+    cpp_link_args = common_args
+    objcpp_args = common_args
+    objcpp_link_args = common_args
     [properties]
     root = root
     [binaries]
@@ -145,12 +154,16 @@ _IOS_CROSS_FILE_TPL = textwrap.dedent(
 
 
 def _get_ios_cross_file_path(cfg):
-    return op.join(cfg.prefix, f"meson-ios-{cfg.args.host_arch}.ini")
+    return op.join(cfg.prefix, f"meson-ios-{cfg.host_dirname}.ini")
 
 
 def _gen_ios_cross_file(cfg):
     cross_file = _IOS_CROSS_FILE_TPL.format(
+        platform_root=op.join(cfg.ios_platform_path, "Developer"),
+        sysroot=cfg.ios_sdk,
         abi=cfg.ios_abi,
+        version_min_flag=_IOS_VERSION_MIN_FLAG_MAP[cfg.ios_platform],
+        version_min=cfg.ios_version_min,
         cpu_family=cfg.cpu_family,
         cpu=cfg.cpu,
     )
@@ -253,11 +266,6 @@ _EXTERNAL_DEPS = dict(
         url="https://github.com/KhronosGroup/MoltenVK/releases/download/v@VERSION@/MoltenVK-macos.tar",
         sha256="57b4184ded521b08a63e3642552ebef8b9e98c2f0bcffa49bd93bbe1301c173d",
     ),
-    moltenvk_iOS=dict(
-        version="1.3.0",
-        url="https://github.com/KhronosGroup/MoltenVK/releases/download/v@VERSION@/MoltenVK-ios.tar",
-        sha256="8cff295513dea3ec754d3662070404d2db54b66f110d5fda1e51f9ed5023c9e1",
-    ),
 )
 
 
@@ -284,7 +292,6 @@ def _get_external_deps(args):
     elif host == "iOS":
         deps.append("boringssl")
         deps.append("ffmpeg")
-        deps.append("moltenvk_iOS")
         deps.append("spirv_cross")
         deps.append("freetype")
         deps.append("harfbuzz")
@@ -360,11 +367,11 @@ def _rmtree(path, ignore_errors=False, onerror=None):
 
 
 def _get_external_dir(args):
-    host, host_arch = _get_host(args)
+    host, _ = _get_host(args)
     if _is_local(host):
         return op.join(_ROOTDIR, "external")
     else:
-        return op.join(_ROOTDIR, "external", host, host_arch)
+        return op.join(_ROOTDIR, "external", host, _get_host_dirname(args))
 
 
 def _download_extract(args, dep_item):
@@ -447,6 +454,19 @@ def _get_host(args):
         return (_SYSTEM, platform.machine())
 
 
+def _get_host_dirname(args):
+    """
+    Name of the per-host-arch directory component (prefix, builddir, external
+    dependencies, Makefile suffix) of cross builds. The iOS simulator gets its
+    own directories since its binaries are not compatible with the device ones,
+    even for the same architecture.
+    """
+    _, host_arch = _get_host(args)
+    if args.host == "iOS" and args.ios_platform == "iphonesimulator":
+        return f"{host_arch}-simulator"
+    return host_arch
+
+
 def _fetch_externals(args):
     dependencies = _get_external_deps(args)
     with Pool() as p:
@@ -469,7 +489,7 @@ def _get_builddir(cfg, component):
     if _is_local(cfg.host):
         return op.join("builddir", component)
     else:
-        return op.join("builddir", cfg.host, cfg.host_arch, component)
+        return op.join("builddir", cfg.host, cfg.host_dirname, component)
 
 
 def _meson_compile_install_cmd(cfg, component):
@@ -546,10 +566,7 @@ def _boringssl_setup(cfg):
             f"-DANDROID_ABI={cfg.android_abi}",
         ]
     elif cfg.host == "iOS":
-        cmake_args += [
-            f"-DCMAKE_OSX_SYSROOT=iphoneos",
-            f"-DCMAKE_OSX_ARCHITECTURES={cfg.ios_abi}",
-        ]
+        cmake_args += _ios_cmake_args(cfg)
     return [
         _cmd_join(*cmake_args),
     ]
@@ -664,7 +681,7 @@ def _ffmpeg_setup(cfg):
     extra_library_dir = op.join(cfg.prefix, "lib")
     extra_cflags = ""
     extra_ldflags = ""
-    extra_libs = "-lstdc++"  # Required by BoringSSL
+    extra_libs = "-lc++" if cfg.host == "iOS" else "-lstdc++"  # Required by BoringSSL
     extra_args = []
     if cfg.host == "Android":
         decoders += [
@@ -689,13 +706,20 @@ def _ffmpeg_setup(cfg):
         decoders += [
             "aac_at",
         ]
-        extra_cflags += f"-arch {cfg.ios_abi} -mios-version-min={cfg.ios_version}"
-        extra_ldflags += f"-arch {cfg.ios_abi} -mios-version-min={cfg.ios_version}"
+        version_min_flag = _IOS_VERSION_MIN_FLAG_MAP[cfg.ios_platform]
+        extra_cflags += f"-arch {cfg.ios_abi} {version_min_flag}={cfg.ios_version_min}"
+        extra_ldflags += f"-arch {cfg.ios_abi} {version_min_flag}={cfg.ios_version_min}"
         extra_args += [
+            "--enable-audiotoolbox",
             "--enable-videotoolbox",
             "--target-os=darwin",
             f"--sysroot={cfg.ios_sdk}",
         ]
+
+    if cfg.static_libs:
+        library_types = ["--enable-static", "--disable-shared"]
+    else:
+        library_types = ["--disable-static", "--enable-shared"]
 
     return [
         f"cd {builddir} && "
@@ -703,10 +727,9 @@ def _ffmpeg_setup(cfg):
             op.join(cfg.externals["ffmpeg"], "configure"),
             "--disable-everything",
             "--disable-doc",
-            "--disable-static",
             "--disable-autodetect",
             "--disable-programs",
-            "--enable-shared",
+            *library_types,
             "--enable-cross-compile",
             "--enable-hwaccels",
             "--enable-avdevice",
@@ -780,8 +803,6 @@ def _moltenvk_install(cfg):
     dep_id = f"moltenvk_{cfg.host}"
     if cfg.host == "Darwin":
         arch = "macos-arm64_x86_64"
-    elif cfg.host == "iOS":
-        arch = "ios-arm64"
     else:
         assert False
     resources = (
@@ -822,14 +843,23 @@ def _glslang_setup(cfg):
             f"-DANDROID_ABI={cfg.android_abi}",
         ]
     elif cfg.host == "iOS":
-        cmake_args += [
-            f"-DCMAKE_OSX_SYSROOT=iphoneos",
-            f"-DCMAKE_OSX_ARCHITECTURES={cfg.ios_abi}",
-        ]
+        cmake_args += _ios_cmake_args(cfg)
     elif cfg.host == "Darwin":
         cmake_args += _darwin_cmake_arch_args()
     return [
         _cmd_join(*cmake_args),
+    ]
+
+
+def _ios_cmake_args(cfg):
+    return [
+        "-DCMAKE_SYSTEM_NAME=iOS",
+        # Executables (such as BoringSSL's bssl tool) are built as regular
+        # binaries instead of application bundles
+        "-DCMAKE_MACOSX_BUNDLE=OFF",
+        f"-DCMAKE_OSX_SYSROOT={cfg.ios_platform}",
+        f"-DCMAKE_OSX_ARCHITECTURES={cfg.ios_abi}",
+        f"-DCMAKE_OSX_DEPLOYMENT_TARGET={cfg.ios_version_min}",
     ]
 
 
@@ -864,10 +894,7 @@ def _spirv_cross_setup(cfg):
         _get_builddir(cfg, "spirv_cross"),
     ]
     if cfg.host == "iOS":
-        cmake_args += [
-            f"-DCMAKE_OSX_SYSROOT=iphoneos",
-            f"-DCMAKE_OSX_ARCHITECTURES={cfg.ios_abi}",
-        ]
+        cmake_args += _ios_cmake_args(cfg)
     elif cfg.host == "Darwin":
         cmake_args += _darwin_cmake_arch_args()
     return [
@@ -904,7 +931,14 @@ def _glslang_install(cfg):
 )
 def _nopemd_setup(cfg):
     builddir = _get_builddir(cfg, "nopemd")
-    return ["$(MESON_SETUP) -Drpath=true " + _cmd_join(cfg.externals["nopemd"], builddir)]
+    opts = ["-Drpath=true"]
+    if cfg.host == "iOS":
+        # The tests can not run on the build machine, and linking them against
+        # the static FFmpeg would require its private dependencies (such as
+        # the C++ runtime needed by BoringSSL) which are not part of its
+        # pkg-config files
+        opts += ["-Dtests=false"]
+    return ["$(MESON_SETUP) " + _cmd_join(*opts, cfg.externals["nopemd"], builddir)]
 
 
 @_block("nopemd-install", [_nopemd_setup])
@@ -969,7 +1003,6 @@ def _fribidi_install(cfg):
         ],
         "iOS": [
             _nopemd_install,
-            _moltenvk_install,
             _glslang_install,
             _spirv_cross_install,
             _freetype_install,
@@ -1001,6 +1034,10 @@ def _nopegl_setup(cfg):
     if "gpu_capture" in cfg.args.debug_opts:
         renderdoc_dir = cfg.externals[_RENDERDOC_ID]
         nopegl_opts += [f"-Drenderdoc_dir={renderdoc_dir}"]
+
+    if cfg.host == "iOS":
+        # Metal is the native backend on iOS; Vulkan would require MoltenVK
+        nopegl_opts += ["-Dgbackend-mtl=enabled", "-Dgbackend-vk=disabled"]
 
     extra_library_dirs = []
     extra_include_dirs = []
@@ -1241,8 +1278,12 @@ def _get_make_vars(cfg):
     ]
     if cfg.args.coverage:
         meson_setup += ["-Db_coverage=true"]
-    if cfg.host != "MinGW" and "debug" not in cfg.args.buildtype:
+    if cfg.host != "MinGW" and "debug" not in cfg.args.buildtype and not cfg.static_libs:
+        # LTO is not enabled for static libraries since it would ship LLVM
+        # bitcode objects tied to the compiler version
         meson_setup += ["-Db_lto=true"]
+    if cfg.static_libs:
+        meson_setup += ["--default-library=static", "-Dprefer_static=true"]
 
     if cfg.host == "Windows":
         meson_setup += ["--bindir=Scripts", "--libdir=Lib", "--includedir=Include"]
@@ -1365,6 +1406,7 @@ class _Config:
     def __init__(self, args, externals):
         self.args = args
         self.host, self.host_arch = _get_host(args)
+        self.host_dirname = _get_host_dirname(args)
 
         self.venv_path = op.abspath(args.venv_path)
         self.venv_bin_path = op.join(self.venv_path, _get_bin_dir(_SYSTEM))
@@ -1376,22 +1418,27 @@ class _Config:
             self.prefix = op.join(op.abspath(self.host), self.android_abi)
         elif self.host == "iOS":
             self.ios_abi = _IOS_ABI_MAP[args.host_arch]
-            self.ios_platform = "iphoneos"
-            self.ios_version = subprocess.run(
-                ["xcrun", "--sdk", f"{self.ios_platform}", "--show-sdk-version"],
-                capture_output=True,
-                text=True,
-                check=True,
-            ).stdout.strip()
-            self.ios_sdk = subprocess.run(
-                ["xcrun", "--sdk", f"{self.ios_platform}", "--show-sdk-path"],
-                capture_output=True,
-                text=True,
-                check=True,
-            ).stdout.strip()
-            self.prefix = op.join(op.abspath(self.host), self.host_arch)
+            self.ios_platform = args.ios_platform
+            self.ios_version_min = args.ios_version_min
+
+            def xcrun_sdk_query(query):
+                return subprocess.run(
+                    ["xcrun", "--sdk", self.ios_platform, query],
+                    capture_output=True,
+                    text=True,
+                    check=True,
+                ).stdout.strip()
+
+            self.ios_sdk = xcrun_sdk_query("--show-sdk-path")
+            self.ios_platform_path = xcrun_sdk_query("--show-sdk-platform-path")
+            self.prefix = op.join(op.abspath(self.host), self.host_dirname)
         else:
             assert False
+
+        # iOS apps can not ship standalone dynamic libraries (they would need
+        # to be wrapped into embedded frameworks), so everything is built
+        # statically to be linked directly into the application.
+        self.static_libs = self.host == "iOS"
 
         self.bin_path = op.join(self.prefix, _get_bin_dir(self.host))
         self.pkg_config_path = op.join(self.prefix, "lib", "pkgconfig")
@@ -1515,6 +1562,17 @@ def _run():
         default="aarch64",
         help="Cross compilation host machine architecture",
     )
+    parser.add_argument(
+        "--ios-platform",
+        choices=tuple(_IOS_VERSION_MIN_FLAG_MAP.keys()),
+        default="iphoneos",
+        help="iOS SDK platform to build for (devices or simulator)",
+    )
+    parser.add_argument(
+        "--ios-version-min",
+        default=_IOS_VERSION_MIN,
+        help="Minimum iOS version to target",
+    )
 
     args = parser.parse_args()
 
@@ -1553,9 +1611,7 @@ def _run():
 
     dst_makefile = op.join(_ROOTDIR, "Makefile")
     if args.host:
-        dst_makefile += f".{args.host}"
-        if args.host_arch:
-            dst_makefile += f".{args.host_arch}"
+        dst_makefile += f".{args.host}.{cfg.host_dirname}"
     logging.info("writing %s", dst_makefile)
     makefile = _get_makefile(cfg, blocks)
     with open(dst_makefile, "w") as f:

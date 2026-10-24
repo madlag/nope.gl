@@ -1,4 +1,8 @@
 /Makefile
+/Makefile.*
+/Android
+/iOS
+/dist-ios
 /appimage
 builddir
 external

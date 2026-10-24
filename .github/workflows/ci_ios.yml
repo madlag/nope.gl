@@ -17,6 +17,12 @@ jobs:
       fail-fast: false
       matrix:
         arch: [aarch64]
+        platform: [iphoneos, iphonesimulator]
+        include:
+          - platform: iphoneos
+            makefile_suffix: ''
+          - platform: iphonesimulator
+            makefile_suffix: '-simulator'
 
     steps:
     - uses: actions/checkout@v4
@@ -27,5 +33,5 @@ jobs:
 
     - name: Build
       run: |
-        ./configure.py --buildtype debug --debug-opts gl vk --host iOS --host-arch ${{ matrix.arch }}
-        make -f Makefile.iOS.${{ matrix.arch }}
+        ./configure.py --buildtype debug --debug-opts gl --host iOS --host-arch ${{ matrix.arch }} --ios-platform ${{ matrix.platform }}
+        make -f Makefile.iOS.${{ matrix.arch }}${{ matrix.makefile_suffix }}
