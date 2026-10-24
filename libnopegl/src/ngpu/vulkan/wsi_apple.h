@@ -19,6 +19,19 @@
  * under the License.
  */
 
-#include <MoltenVK/mvk_vulkan.h>
+#ifndef WSI_APPLE_H
+#define WSI_APPLE_H
+
+/*
+ * Same declaration as the Vulkan Metal surface header, so that this header
+ * does not depend on MoltenVK (it is also used by the Metal backend)
+ */
+#ifdef __OBJC__
+@class CAMetalLayer;
+#else
+typedef void CAMetalLayer;
+#endif
 
 CAMetalLayer *ngpu_window_get_metal_layer(const void *handle);
+
+#endif
